@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SecureCam — Live Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #080c08; --surface: #0d120d; --surface2: #131a13;
+  --border: rgba(0,255,70,0.12); --border-hi: rgba(0,255,70,0.3);
+  --green: #00ff46; --green-dim: rgba(0,255,70,0.07); --green-glow: rgba(0,255,70,0.25);
+  --red: #ff3030; --amber: #ffaa00; --text: #c8e6c8; --muted: #4a6b4a;
+  --mono: 'Share Tech Mono', monospace; --display: 'Barlow Condensed', sans-serif;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); }
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+  pointer-events: none; z-index: 9999;
+}
+header { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.brand { font-family: var(--display); font-size: 1.3rem; font-weight: 700; letter-spacing: 0.15em; color: var(--green); text-shadow: 0 0 10px var(--green-glow); text-transform: uppercase; }
+.brand span { color: var(--text); font-weight: 400; }
+.rec-badge { display: flex; align-items: center; gap: 6px; color: var(--red); font-size: 0.7rem; letter-spacing: 0.1em; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+#clock { font-size: 0.75rem; color: var(--green); letter-spacing: 0.05em; }
+.tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 20px; }
+.tab { font-family: var(--display); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 10px 18px; border: none; background: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--green); border-bottom-color: var(--green); text-shadow: 0 0 8px var(--green-glow); }
+main { padding: 20px; max-width: 700px; margin: 0 auto; }
+.panel { display: none; }
+.panel.active { display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.card-title { font-family: var(--display); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; color: var(--green); text-transform: uppercase; }
+.card-body { padding: 14px; }
+video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; object-fit: cover; border-radius: 2px; }
+.video-wrap { position: relative; }
+.vid-placeholder { width: 100%; aspect-ratio: 16/9; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 0.7rem; letter-spacing: 0.06em; border-radius: 2px; }
+.corner { position: absolute; width: 14px; height: 14px; border-color: var(--green); border-style: solid; opacity: 0.4; }
+.corner.tl { top: 8px; left: 8px; border-width: 2px 0 0 2px; }
+.corner.tr { top: 8px; right: 8px; border-width: 2px 2px 0 0; }
+.corner.bl { bottom: 8px; left: 8px; border-width: 0 0 2px 2px; }
+.corner.br { bottom: 8px; right: 8px; border-width: 0 2px 2px 0; }
+.code-block { background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 2px; padding: 14px; text-align: center; }
+.code-value { font-family: var(--mono); font-size: 2.4rem; letter-spacing: 0.3em; color: var(--green); text-shadow: 0 0 18px var(--green-glow); }
+.code-hint { font-size: 0.65rem; color: var(--muted); margin-top: 6px; letter-spacing: 0.05em; }
+.status-row { display: flex; align-items: center; gap: 8px; font-size: 0.68rem; color: var(--muted); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s, box-shadow 0.3s; }
+.dot.green { background: var(--green); box-shadow: 0 0 6px var(--green-glow); }
+.dot.amber { background: var(--amber); animation: blink 1.2s infinite; }
+.dot.red { background: var(--red); }
+.btn { font-family: var(--display); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 14px; border-radius: 2px; border: 1px solid var(--border-hi); background: transparent; color: var(--green); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.btn:hover { background: var(--green-dim); box-shadow: 0 0 8px var(--green-glow); }
+.btn.danger { border-color: rgba(255,48,48,0.4); color: var(--red); }
+.btn.danger:hover { background: rgba(255,48,48,0.08); box-shadow: none; }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-primary { font-family: var(--display); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 9px 24px; border-radius: 2px; border: 1px solid var(--green); background: var(--green-dim); color: var(--green); cursor: pointer; text-shadow: 0 0 8px var(--green-glow); box-shadow: 0 0 12px var(--green-glow); transition: all 0.15s; width: 100%; }
+.btn-primary:hover { background: rgba(0,255,70,0.15); }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.code-input { width: 100%; font-family: var(--mono); font-size: 1.6rem; letter-spacing: 0.25em; text-transform: uppercase; text-align: center; background: var(--surface2); border: 1px solid var(--border-hi); border-radius: 2px; color: var(--green); padding: 10px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 10px; }
+.code-input:focus { border-color: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+.code-input::placeholder { color: var(--muted); font-size: 1rem; letter-spacing: 0.1em; }
+.notice { font-size: 0.65rem; color: var(--muted); line-height: 1.6; padding: 8px 12px; border: 1px solid var(--border); border-radius: 2px; border-left: 2px solid var(--border-hi); background: var(--surface2); }
+.error-box { font-size: 0.68rem; color: var(--red); line-height: 1.6; padding: 8px 12px; border: 1px solid rgba(255,48,48,0.3); border-radius: 2px; background: rgba(255,48,48,0.05); margin-top: 10px; display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Secure<span>Cam</span></div>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div class="rec-badge"><div class="rec-dot"></div> REC</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('camera')">⬡ Camera — Host</button>
+  <button class="tab" onclick="switchTab('viewer')">▦ Viewer — Monitor</button>
+</div>
+
+<main>
+
+  <!-- CAMERA PANEL -->
+  <div class="panel active" id="panel-camera">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Live preview</span>
+        <div class="status-row">
+          <div class="dot" id="cam-dot"></div>
+          <span id="cam-status">offline</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="video-wrap">
+          <div class="vid-placeholder" id="cam-placeholder">
+            <span style="font-size:2rem;opacity:0.15;">◫</span>
+            <span>no signal</span>
+          </div>
+          <video id="local-video" autoplay muted playsinline style="display:none;"></video>
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="start-btn" onclick="startCamera()">▶ Start camera</button>
+          <button class="btn danger" id="stop-btn" onclick="stopCamera()" style="display:none;">■ Stop</button>
+        </div>
+        <div id="cam-error" class="error-box"></div>
+      </div>
+    </div>
+
+    <div class="card" id="code-card" style="display:none;">
+      <div class="card-header">
+        <span class="card-title">Room code — share with viewer</span>
+        <button class="btn" id="copy-btn" onclick="copyCode()">Copy</button>
+      </div>
+      <div class="card-body">
+        <div class="code-block">
+          <div class="code-value" id="room-code">——</div>
+          <div class="code-hint">enter this on the viewer computer</div>
+        </div>
+        <div class="status-row" style="margin-top:12px;">
+          <div class="dot" id="peer-dot"></div>
+          <span id="peer-status">waiting for viewer…</span>
+        </div>
+        <div id="peer-error" class="error-box"></div>
+      </div>
+    </div>
+
+    <p class="notice">Must be on HTTPS or localhost for camera access. Keep this tab open while streaming.</p>
+  </div>
+
+  <!-- VIEWER PANEL -->
+  <div class="panel" id="panel-viewer">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Enter room code</span></div>
+      <div class="card-body">
+        <input class="code-input" type="text" id="code-input" maxlength="6" placeholder="ABC123"
+          autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')connect()" />
+        <button class="btn-primary" id="connect-btn" onclick="connect()">▶ Connect</button>
+        <div class="status-row" style="margin-top:10px;">
+          <div class="dot" id="view-dot"></div>
+          <span id="view-status">not connected</span>
+        </div>
+        <div id="view-error" class="error-box"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Remote feed</span>
+        <span id="view-ts" style="font-size:0.65rem;color:var(--muted);"></span>
+      </div>
+      <div class="card-body">
+        <div class="video-wrap">
+          <div class="vid-placeholder" id="view-placeholder">
+            <span style="font-size:2rem;opacity:0.15;">◫</span>
+            <span>no signal</span>
+          </div>
+          <video id="remote-video" autoplay playsinline style="display:none;"></video>
+          <div class="corner tl"></div><div class="corner tr"></div>
+          <div class="corner bl"></div><div class="corner br"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="notice">The host must be running before you connect. Stream is peer-to-peer via WebRTC — signaled through Firebase.</p>
+  </div>
+
+</main>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, getDocs, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAjkTDiFp_mi-UCV5rRYlkUQ0BuzAh5siE",
+  authDomain: "dashboard-406a6.firebaseapp.com",
+  projectId: "dashboard-406a6",
+  storageBucket: "dashboard-406a6.firebasestorage.app",
+  messagingSenderId: "666668169031",
+  appId: "1:666668169031:web:9e00d3577ac8e27cfcbe62"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ]
+};
+
+// ── Helpers ──
+function setDot(id, color) { document.getElementById(id).className = 'dot ' + color; }
+function setText(id, t) { document.getElementById(id).textContent = t; }
+function showErr(id, msg) { const e = document.getElementById(id); e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
+function makeCode() {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = ''; for (let i=0;i<6;i++) s += c[Math.floor(Math.random()*c.length)]; return s;
+}
+
+// ── Clock ──
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'}).replace(/\//g,'-') +
+    '  ' + n.toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000); updateClock();
+setInterval(() => {
+  const vid = document.getElementById('remote-video');
+  if (vid.style.display !== 'none')
+    document.getElementById('view-ts').textContent = new Date().toTimeString().slice(0,8);
+}, 1000);
+
+// ── Tab switch ──
+window.switchTab = function(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab')[tab === 'camera' ? 0 : 1].classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+};
+
+// ── State ──
+let localStream = null;
+let hostPC = null;
+let viewerPC = null;
+let roomCode = null;
+let unsubAnswer = null;
+let unsubCandidates = null;
+let unsubOffer = null;
+let unsubViewerCandidates = null;
+
+// ── HOST: Start camera ──
+window.startCamera = async function() {
+  showErr('cam-error','');
+  setDot('cam-dot','amber'); setText('cam-status','starting…');
+  document.getElementById('start-btn').disabled = true;
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  } catch(e) {
+    document.getElementById('start-btn').disabled = false;
+    setDot('cam-dot','red');
+    if (e.name === 'NotAllowedError') {
+      setText('cam-status','permission denied');
+      showErr('cam-error','⚠ Camera blocked. Click the lock icon in your address bar → Allow camera. Page must be HTTPS or localhost.');
+    } else if (e.name === 'NotFoundError') {
+      setText('cam-status','no camera found');
+      showErr('cam-error','⚠ No camera detected on this device.');
+    } else {
+      setText('cam-status','error');
+      showErr('cam-error','⚠ ' + e.name + ': ' + e.message);
+    }
+    return;
+  }
+
+  const vid = document.getElementById('local-video');
+  vid.srcObject = localStream; vid.style.display = 'block';
+  document.getElementById('cam-placeholder').style.display = 'none';
+  document.getElementById('start-btn').style.display = 'none';
+  document.getElementById('stop-btn').style.display = '';
+  document.getElementById('start-btn').disabled = false;
+  setDot('cam-dot','green'); setText('cam-status','live');
+
+  await startHost();
+};
+
+async function startHost() {
+  roomCode = makeCode();
+  document.getElementById('room-code').textContent = roomCode;
+  document.getElementById('code-card').style.display = '';
+  setDot('peer-dot','amber'); setText('peer-status','creating room…');
+  showErr('peer-error','');
+
+  // Clean up old room if exists
+  const roomRef = doc(db, 'rooms', roomCode);
+  await setDoc(roomRef, { created: Date.now(), active: true });
+
+  // Create peer connection
+  hostPC = new RTCPeerConnection(ICE_SERVERS);
+
+  // Add local stream tracks
+  localStream.getTracks().forEach(track => hostPC.addTrack(track, localStream));
+
+  // Collect host ICE candidates into Firestore
+  const hostCandidatesRef = collection(roomRef, 'hostCandidates');
+  hostPC.onicecandidate = async e => {
+    if (e.candidate) {
+      await addDoc(hostCandidatesRef, e.candidate.toJSON());
+    }
+  };
+
+  hostPC.onconnectionstatechange = () => {
+    const s = hostPC.connectionState;
+    if (s === 'connected') { setDot('peer-dot','green'); setText('peer-status','viewer connected — streaming'); }
+    else if (s === 'disconnected' || s === 'failed') { setDot('peer-dot','amber'); setText('peer-status','viewer disconnected'); }
+    else if (s === 'connecting') { setDot('peer-dot','amber'); setText('peer-status','viewer connecting…'); }
+  };
+
+  // Create offer
+  const offer = await hostPC.createOffer();
+  await hostPC.setLocalDescription(offer);
+  await setDoc(roomRef, { offer: { type: offer.type, sdp: offer.sdp }, active: true });
+
+  setDot('peer-dot','green'); setText('peer-status','ready — waiting for viewer');
+
+  // Listen for answer from viewer
+  unsubAnswer = onSnapshot(roomRef, async snap => {
+    const data = snap.data();
+    if (data?.answer && hostPC.signalingState !== 'stable') {
+      const answer = new RTCSessionDescription(data.answer);
+      await hostPC.setRemoteDescription(answer);
+    }
+  });
+
+  // Listen for viewer ICE candidates
+  const viewerCandidatesRef = collection(roomRef, 'viewerCandidates');
+  unsubViewerCandidates = onSnapshot(viewerCandidatesRef, snap => {
+    snap.docChanges().forEach(async change => {
+      if (change.type === 'added') {
+        const c = new RTCIceCandidate(change.doc.data());
+        if (hostPC.remoteDescription) await hostPC.addIceCandidate(c);
+      }
+    });
+  });
+}
+
+window.stopCamera = async function() {
+  if (unsubAnswer) { unsubAnswer(); unsubAnswer = null; }
+  if (unsubViewerCandidates) { unsubViewerCandidates(); unsubViewerCandidates = null; }
+  if (hostPC) { hostPC.close(); hostPC = null; }
+  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+
+  // Mark room inactive
+  if (roomCode) {
+    try { await setDoc(doc(db,'rooms',roomCode), { active: false }); } catch(e) {}
+    roomCode = null;
+  }
+
+  document.getElementById('local-video').style.display = 'none';
+  document.getElementById('local-video').srcObject = null;
+  document.getElementById('cam-placeholder').style.display = 'flex';
+  document.getElementById('start-btn').style.display = '';
+  document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('code-card').style.display = 'none';
+  setDot('cam-dot',''); setText('cam-status','offline');
+  showErr('cam-error',''); showErr('peer-error','');
+};
+
+window.copyCode = function() {
+  const code = document.getElementById('room-code').textContent;
+  if (code && code !== '——') {
+    navigator.clipboard.writeText(code).catch(()=>{});
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  }
+};
+
+// ── VIEWER: Connect ──
+window.connect = async function() {
+  const code = document.getElementById('code-input').value.trim().toUpperCase();
+  showErr('view-error','');
+  if (code.length !== 6) { setDot('view-dot','red'); setText('view-status','need 6-char code'); return; }
+
+  setDot('view-dot','amber'); setText('view-status','looking up room…');
+  const btn = document.getElementById('connect-btn'); btn.disabled = true;
+
+  // Cleanup old connection
+  if (unsubOffer) { unsubOffer(); unsubOffer = null; }
+  if (unsubCandidates) { unsubCandidates(); unsubCandidates = null; }
+  if (viewerPC) { viewerPC.close(); viewerPC = null; }
+
+  const roomRef = doc(db, 'rooms', code);
+  let roomSnap;
+  try {
+    roomSnap = await getDoc(roomRef);
+  } catch(e) {
+    setDot('view-dot','red'); setText('view-status','firestore error');
+    showErr('view-error','⚠ Could not reach Firebase: ' + e.message);
+    btn.disabled = false; return;
+  }
+
+  if (!roomSnap.exists() || !roomSnap.data().offer) {
+    setDot('view-dot','red'); setText('view-status','room not found');
+    showErr('view-error','⚠ No active host found for that code. Make sure the host tab is open and camera is started.');
+    btn.disabled = false; return;
+  }
+
+  setText('view-status','connecting…');
+
+  viewerPC = new RTCPeerConnection(ICE_SERVERS);
+
+  // Collect viewer ICE candidates
+  const viewerCandidatesRef = collection(roomRef, 'viewerCandidates');
+  viewerPC.onicecandidate = async e => {
+    if (e.candidate) await addDoc(viewerCandidatesRef, e.candidate.toJSON());
+  };
+
+  viewerPC.ontrack = e => {
+    const vid = document.getElementById('remote-video');
+    if (!vid.srcObject) vid.srcObject = new MediaStream();
+    vid.srcObject.addTrack(e.track);
+    vid.style.display = 'block';
+    document.getElementById('view-placeholder').style.display = 'none';
+    setDot('view-dot','green'); setText('view-status','live');
+    showErr('view-error','');
+    btn.disabled = false; btn.textContent = '↺ Reconnect';
+  };
+
+  viewerPC.onconnectionstatechange = () => {
+    const s = viewerPC.connectionState;
+    if (s === 'failed') {
+      setDot('view-dot','red'); setText('view-status','connection failed');
+      showErr('view-error','⚠ WebRTC connection failed. Both devices must be on the same network or HTTPS.');
+      btn.disabled = false;
+    }
+    if (s === 'disconnected') { setDot('view-dot','amber'); setText('view-status','disconnected'); }
+  };
+
+  // Set remote offer
+  await viewerPC.setRemoteDescription(new RTCSessionDescription(roomSnap.data().offer));
+
+  // Create answer
+  const answer = await viewerPC.createAnswer();
+  await viewerPC.setLocalDescription(answer);
+  await setDoc(roomRef, { ...roomSnap.data(), answer: { type: answer.type, sdp: answer.sdp } });
+
+  // Listen for host ICE candidates
+  const hostCandidatesRef = collection(roomRef, 'hostCandidates');
+  unsubCandidates = onSnapshot(hostCandidatesRef, snap => {
+    snap.docChanges().forEach(async change => {
+      if (change.type === 'added') {
+        const c = new RTCIceCandidate(change.doc.data());
+        if (viewerPC.remoteDescription) await viewerPC.addIceCandidate(c);
+      }
+    });
+  });
+
+  setText('view-status','waiting for stream…');
+};
+
+</script>
+</body>
+</html>
